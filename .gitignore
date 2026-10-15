@@ -1,0 +1,8 @@
+target/
+nbproject/private/
+*.lock
+*.lck
+.idea/
+*.iml
+.claude/
+openspec/

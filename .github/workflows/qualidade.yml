@@ -1,0 +1,48 @@
+name: Qualidade
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  componente:
+    name: Componente (painel-pedidos)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: mvn -U clean verify
+        working-directory: painel-pedidos
+        run: mvn -B -U clean verify
+
+  exemplo:
+    name: Exemplo (contra o artefato publicado)
+    needs: componente
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Verifica se o artefato publicado resolve
+        id: resolve
+        working-directory: exemplo
+        run: |
+          if mvn -B -U -q dependency:resolve; then
+            echo "resolve=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "resolve=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Artefato do componente ainda nao publicado no JitPack; gate do exemplo ignorado."
+          fi
+      - name: mvn -U clean verify
+        if: steps.resolve.outputs.resolve == 'true'
+        working-directory: exemplo
+        run: mvn -B -U clean verify

@@ -1,0 +1,57 @@
+name: Verificar JitPack
+
+# Disparado ao fim do Release: aguarda o JitPack construir o artefato da tag e
+# verifica o exemplo contra ele. Separado do Release para evitar o ciclo
+# (o JitPack so constroi depois que a Release existe).
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+jobs:
+  verificar:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.workflow_run.head_branch }}
+      OWNER: ${{ github.repository_owner }}
+      REPO: ${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Aguarda o build do JitPack
+        run: |
+          url="https://jitpack.io/com/github/${OWNER}/${REPO}/${TAG}/${REPO}-${TAG}.pom"
+          for tentativa in $(seq 1 40); do
+            if curl -sSf -o /dev/null "$url"; then
+              echo "Artefato disponivel: $url"
+              exit 0
+            fi
+            echo "Tentativa ${tentativa}/40: JitPack ainda construindo..."
+            sleep 30
+          done
+          echo "::error::JitPack nao publicou ${OWNER}/${REPO}:${TAG} a tempo. Veja https://jitpack.io/#${OWNER}/${REPO}/${TAG}"
+          exit 1
+
+      - name: Verifica o exemplo contra o artefato publicado
+        working-directory: exemplo
+        run: |
+          mvn -B -U clean verify \
+            -Dpainel-pedidos.groupId="com.github.${OWNER}" \
+            -Dpainel-pedidos.artifactId="${REPO}" \
+            -Dpainel-pedidos.version="${TAG}"
+
+      - name: Registra a versao verificada
+        run: |
+          {
+            echo "### Publicacao verificada"
+            echo ""
+            echo "\`com.github.${OWNER}:${REPO}:${TAG}\` resolvido no JitPack e exemplo verde."
+          } >> "$GITHUB_STEP_SUMMARY"

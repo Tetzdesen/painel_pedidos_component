@@ -1,0 +1,15 @@
+# O JitPack usa uma imagem com Maven antigo: instalamos um Maven moderno antes do build.
+# Sem pom na raiz, construimos painel-pedidos/ e publicamos o jar (com todas as
+# dependencias) como o artefato unico do repositorio: com.github.<usuario>:<repositorio>:<tag>.
+jdk:
+  - openjdk21
+before_install:
+  - wget -q https://archive.apache.org/dist/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz
+  - tar xzf apache-maven-3.9.9-bin.tar.gz
+install:
+  - ./apache-maven-3.9.9/bin/mvn -B -U -f painel-pedidos/pom.xml clean verify
+  - >-
+    ./apache-maven-3.9.9/bin/mvn -B install:install-file
+    -Dfile=painel-pedidos/target/painel-pedidos-1.0.0.jar
+    -DgroupId=$GROUP -DartifactId=$ARTIFACT -Dversion=$VERSION
+    -Dpackaging=jar -DgeneratePom=true

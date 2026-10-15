@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Verifica o componente
+        working-directory: painel-pedidos
+        run: mvn -B -U clean verify
+
+      - name: Publica a Release com o jar do componente
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" painel-pedidos/target/painel-pedidos-1.0.0.jar \
+            --title "$TAG" --generate-notes
+
+      - name: Alinha a versao do exemplo com a nova tag
+        env:
+          TAG: ${{ github.ref_name }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          git fetch origin main
+          git checkout main
+          sed -i \
+            -e "s|<painel-pedidos.groupId>.*</painel-pedidos.groupId>|<painel-pedidos.groupId>com.github.${OWNER}</painel-pedidos.groupId>|" \
+            -e "s|<painel-pedidos.artifactId>.*</painel-pedidos.artifactId>|<painel-pedidos.artifactId>${REPO}</painel-pedidos.artifactId>|" \
+            -e "s|<painel-pedidos.version>.*</painel-pedidos.version>|<painel-pedidos.version>${TAG}</painel-pedidos.version>|" \
+            exemplo/pom.xml
+          if git diff --quiet; then
+            echo "exemplo/pom.xml ja aponta para ${TAG}"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "exemplo: usa o componente ${TAG}"
+          git push origin main
